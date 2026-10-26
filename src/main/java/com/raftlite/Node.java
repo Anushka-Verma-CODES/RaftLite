@@ -1,4 +1,6 @@
 package com.raftlite;
+import java.util.concurrent.atomic.AtomicLong;
+
 
 public class Node {
 
@@ -98,5 +100,26 @@ public class Node {
 
     public void addVote() {
         votesReceived++;
+    }
+
+    private final AtomicLong lastHeartbeatTime = new AtomicLong(
+            System.currentTimeMillis());
+
+    public void receiveHeartbeat(int leaderTerm) {
+        if (state == NodeState.FAILED || leaderTerm < currentTerm) {
+            return;
+        }
+
+        currentTerm = leaderTerm;
+
+        if (state != NodeState.LEADER) {
+            state = NodeState.FOLLOWER;
+        }
+
+        lastHeartbeatTime.set(System.currentTimeMillis());
+    }
+
+    public long getLastHeartbeatTime() {
+        return lastHeartbeatTime.get();
     }
 }
