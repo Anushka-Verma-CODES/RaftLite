@@ -1,7 +1,7 @@
 package com.raftlite;
 
 public enum MessageType {
-    REQUEST_VOTE,
-    VOTE_RESPONSE,
-    HEARTBEAT
+    HEARTBEAT,
+    VOTE_REQUEST,
+    VOTE_RESPONSE
 }
