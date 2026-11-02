@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class Node {
 
     private final int nodeId;
+
     private NodeState state;
     private int currentTerm;
     private Integer votedFor;
@@ -36,21 +37,6 @@ public class Node {
         return currentTerm;
     }
 
-    public synchronized void setState(NodeState state) {
-        this.state = state;
-    }
-
-    public synchronized void setCurrentTerm(int currentTerm) {
-        this.currentTerm = currentTerm;
-    }
-
-    public synchronized void displayStatus() {
-        System.out.println(
-                "Node " + nodeId +
-                        " | State: " + state +
-                        " | Term: " + currentTerm);
-    }
-
     public synchronized Integer getVotedFor() {
         return votedFor;
     }
@@ -59,9 +45,22 @@ public class Node {
         return votesReceived;
     }
 
+    public synchronized void setState(NodeState state) {
+        if (this.state != NodeState.FAILED) {
+            this.state = state;
+        }
+    }
+
+    public synchronized void displayStatus() {
+        System.out.println(
+                "Node " + nodeId +
+                " | State: " + state +
+                " | Term: " + currentTerm);
+    }
+
     public synchronized void startElection() {
+
         if (state == NodeState.FAILED) {
-            System.out.println("Failed node cannot start an election.");
             return;
         }
 
@@ -69,11 +68,12 @@ public class Node {
         state = NodeState.CANDIDATE;
         votedFor = nodeId;
         votesReceived = 1;
+
         heartbeatTimedOut = false;
 
         System.out.println(
                 "Node " + nodeId +
-                        " started election for term " + currentTerm);
+                " started election for term " + currentTerm);
     }
 
     public synchronized boolean requestVote(
@@ -91,6 +91,7 @@ public class Node {
             currentTerm = candidateTerm;
             state = NodeState.FOLLOWER;
             votedFor = null;
+            votesReceived = 0;
         }
 
         if (votedFor == null ||
@@ -100,7 +101,7 @@ public class Node {
 
             System.out.println(
                     "Node " + nodeId +
-                            " voted for Node " + candidate.getNodeId());
+                    " voted for Node " + candidate.getNodeId());
 
             return true;
         }
@@ -108,38 +109,102 @@ public class Node {
         return false;
     }
 
+    public synchronized void receiveVoteResponse(
+            int responseTerm, boolean voteGranted) {
+
+        if (state != NodeState.CANDIDATE) {
+            return;
+        }
+
+        if (responseTerm > currentTerm) {
+            currentTerm = responseTerm;
+            state = NodeState.FOLLOWER;
+            votedFor = null;
+            votesReceived = 0;
+            return;
+        }
+
+        if (responseTerm != currentTerm || !voteGranted) {
+            return;
+        }
+
+        votesReceived++;
+
+        System.out.println(
+                "Node " + nodeId +
+                " received a vote. Total votes: " +
+                votesReceived);
+    }
+
     public synchronized void becomeLeader() {
-        if (state == NodeState.FAILED) {
+
+        if (state != NodeState.CANDIDATE) {
             return;
         }
 
         state = NodeState.LEADER;
 
-        System.out.println("Node " + nodeId + " became LEADER!");
+        System.out.println(
+                "Node " + nodeId + " became LEADER!");
     }
 
-    public synchronized void addVote() {
-        votesReceived++;
-    }
+    public synchronized void receiveHeartbeat(
+            int leaderTerm, int leaderId) {
 
-    
-    public synchronized void receiveHeartbeat(int leaderTerm) {
-        if (state == NodeState.FAILED || leaderTerm < currentTerm) {
+        if (state == NodeState.FAILED ||
+                leaderTerm < currentTerm) {
             return;
         }
 
-    if (leaderTerm > currentTerm) {
+        if (leaderTerm > currentTerm) {
             currentTerm = leaderTerm;
             votedFor = null;
+            votesReceived = 0;
             state = NodeState.FOLLOWER;
-        } else if (state != NodeState.FOLLOWER) {
+        } else if (state == NodeState.CANDIDATE) {
             state = NodeState.FOLLOWER;
+        } else if (state == NodeState.LEADER) {
+
+            System.out.println(
+                    "Node " + nodeId +
+                    " received a same-term heartbeat from Node " +
+                    leaderId + ". Leader conflict detected.");
+
+            return;
         }
 
         lastHeartbeatTime.set(System.currentTimeMillis());
         heartbeatTimedOut = false;
     }
 
+    public synchronized void receiveMessage(RaftMessage message) {
+
+        if (state == NodeState.FAILED) {
+            return;
+        }
+
+        switch (message.getType()) {
+
+            case HEARTBEAT:
+                receiveHeartbeat(
+                        message.getTerm(),
+                        message.getSenderId());
+                break;
+
+            case VOTE_RESPONSE:
+                receiveVoteResponse(
+                        message.getTerm(),
+                        message.isVoteGranted());
+                break;
+
+            case VOTE_REQUEST:
+                System.out.println(
+                        "Node " + nodeId +
+                        " received vote request from Node " +
+                        message.getSenderId());
+                break;
+        }
+    }
 
     public long getLastHeartbeatTime() {
         return lastHeartbeatTime.get();
@@ -150,7 +215,9 @@ public class Node {
     }
 
     public synchronized boolean markHeartbeatTimedOut() {
-        if (heartbeatTimedOut) {
+
+        if (heartbeatTimedOut ||
+                state != NodeState.FOLLOWER) {
             return false;
         }
 
@@ -159,17 +226,30 @@ public class Node {
     }
 
     public synchronized void fail() {
+
+        if (state == NodeState.FAILED) {
+            return;
+        }
+
         state = NodeState.FAILED;
 
-        System.out.println("Node " + nodeId + " has FAILED.");
+        System.out.println(
+                "Node " + nodeId + " has FAILED.");
     }
 
     public synchronized void recover() {
+
+        if (state != NodeState.FAILED) {
+            return;
+        }
+
         state = NodeState.FOLLOWER;
+
         lastHeartbeatTime.set(System.currentTimeMillis());
         heartbeatTimedOut = false;
 
         System.out.println(
-                "Node " + nodeId + " has RECOVERED as a FOLLOWER.");
+                "Node " + nodeId +
+                " has RECOVERED as a FOLLOWER.");
     }
 }
