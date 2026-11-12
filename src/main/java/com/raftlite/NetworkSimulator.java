@@ -7,13 +7,13 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class NetworkSimulator {
 
-    private final Map<Integer, Node> nodes =
+    private final Map<Integer, RaftNode> nodes =
             new ConcurrentHashMap<>();
 
     private final Set<String> disconnectedLinks =
             ConcurrentHashMap.newKeySet();
 
-    public void registerNode(Node node) {
+    public void registerNode(RaftNode node) {
 
         nodes.put(node.getNodeId(), node);
 
@@ -24,8 +24,8 @@ public class NetworkSimulator {
 
     public boolean sendMessage(RaftMessage message) {
 
-        Node sender = nodes.get(message.getSenderId());
-        Node receiver = nodes.get(message.getReceiverId());
+        RaftNode sender = nodes.get(message.getSenderId());
+        RaftNode receiver = nodes.get(message.getReceiverId());
 
         if (sender == null || receiver == null) {
             System.out.println(
@@ -60,17 +60,22 @@ public class NetworkSimulator {
             case HEARTBEAT:
 
                 receiver.receiveMessage(message);
+
+                // The heartbeat reply carries the follower's term, so a
+                // stale leader learns about a newer term and steps down.
+                sender.updateTermIfHigher(receiver.getCurrentTerm());
                 break;
 
             case VOTE_REQUEST:
 
-                boolean voteGranted = receiver.requestVote(
-                        sender,
-                        message.getTerm());
+                VoteResponse vote = receiver.handleVoteRequest(
+                        new VoteRequest(
+                                message.getTerm(),
+                                sender.getNodeId()));
 
                 System.out.println(
                         "Node " + receiver.getNodeId() +
-                        (voteGranted
+                        (vote.isVoteGranted()
                                 ? " granted a vote to Node "
                                 : " rejected the vote of Node ")
                         + sender.getNodeId());
@@ -79,8 +84,8 @@ public class NetworkSimulator {
                         receiver.getNodeId(),
                         sender.getNodeId(),
                         MessageType.VOTE_RESPONSE,
-                        receiver.getCurrentTerm(),
-                        voteGranted);
+                        vote.getTerm(),
+                        vote.isVoteGranted());
 
                 sendMessage(response);
                 break;
