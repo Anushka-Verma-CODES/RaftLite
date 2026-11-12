@@ -89,6 +89,45 @@ public class Main {
                         "No active leader found.");
             }
 
+            // TEST 6: Isolate the leader, then reconnect it.
+            // The old leader must step down when it sees the higher term.
+
+            System.out.println(
+                    "\n===== TEST 6: ISOLATE AND RECONNECT LEADER =====");
+
+            int isolatedLeader = cluster.getCurrentLeaderId();
+
+            if (isolatedLeader != -1) {
+
+                cluster.disconnectNode(isolatedLeader);
+
+                Thread.sleep(3500);
+
+                System.out.println(
+                        "Status while Node " + isolatedLeader +
+                        " is isolated:");
+
+                cluster.displayClusterStatus();
+
+                cluster.reconnectNode(isolatedLeader);
+
+                Thread.sleep(1000);
+
+                cluster.displayClusterStatus();
+            }
+
+            System.out.println("\n===== LEADER OF EACH TERM =====");
+
+            ElectionManager elections = cluster.getElectionManager();
+
+            elections.getLeaderHistory().forEach((term, leader) ->
+                    System.out.println(
+                            "Term " + term + " -> Node " + leader));
+
+            System.out.println(
+                    "Total election attempts: " +
+                    elections.getElectionAttempts());
+
             System.out.println(
                     "\n===== ALL TESTS COMPLETED =====");
 
