@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit;
 
 public class RaftCluster {
 
-    private final List<Node> nodes =
+    private final List<RaftNode> nodes =
             new CopyOnWriteArrayList<>();
 
     private final NetworkSimulator network =
@@ -18,25 +18,29 @@ public class RaftCluster {
     private ScheduledExecutorService heartbeatScheduler;
     private ScheduledExecutorService timeoutScheduler;
 
+    private final ElectionManager electionManager;
+
     private static final long HEARTBEAT_INTERVAL = 500;
-    private static final long HEARTBEAT_TIMEOUT = 2000;
+    private static final long TIMEOUT_CHECK_INTERVAL = 100;
 
     public RaftCluster(int numberOfNodes) {
 
         for (int i = 1; i <= numberOfNodes; i++) {
 
-            Node node = new Node(i);
+            RaftNode node = new RaftNode(i);
 
             nodes.add(node);
             network.registerNode(node);
         }
+
+        electionManager = new ElectionManager(nodes, network);
     }
 
     public synchronized void displayClusterStatus() {
 
         System.out.println("\n===== RAFT-LITE CLUSTER =====");
 
-        for (Node node : nodes) {
+        for (RaftNode node : nodes) {
             node.displayStatus();
         }
 
@@ -45,70 +49,32 @@ public class RaftCluster {
 
     public synchronized void electLeader(int candidateId) {
 
-        Node candidate = getNodeById(candidateId);
+        try {
 
-        if (candidate == null) {
-            System.out.println(
-                    "Election failed: node not found.");
-            return;
-        }
-
-        if (candidate.getState() == NodeState.FAILED) {
-            System.out.println(
-                    "Failed node cannot start an election.");
-            return;
-        }
-
-        candidate.startElection();
-
-        int currentTerm = candidate.getCurrentTerm();
-
-        for (Node node : nodes) {
-
-            if (node.getNodeId() == candidateId) {
-                continue;
+            if (electionManager.runElection(candidateId)) {
+                broadcastHeartbeats();
             }
 
-            network.requestVote(
-                    candidateId,
-                    node.getNodeId(),
-                    currentTerm);
-        }
-
-        int votes = candidate.getVotesReceived();
-        int majority = nodes.size() / 2 + 1;
-
-        System.out.println(
-                "Node " + candidateId +
-                " received " + votes + " votes.");
-
-        if (votes >= majority &&
-                candidate.getState() == NodeState.CANDIDATE) {
-
-            candidate.becomeLeader();
-
-            broadcastHeartbeats();
-
-        } else {
-
-            if (candidate.getState() == NodeState.CANDIDATE) {
-                candidate.setState(NodeState.FOLLOWER);
-            }
+        } catch (ElectionException e) {
 
             System.out.println(
-                    "Election failed: majority not reached.");
+                    "Election not started: " + e.getMessage());
         }
+    }
+
+    public ElectionManager getElectionManager() {
+        return electionManager;
     }
 
     private void broadcastHeartbeats() {
 
-        for (Node leader : nodes) {
+        for (RaftNode leader : nodes) {
 
             if (leader.getState() != NodeState.LEADER) {
                 continue;
             }
 
-            for (Node follower : nodes) {
+            for (RaftNode follower : nodes) {
 
                 if (follower.getNodeId() == leader.getNodeId()) {
                     continue;
@@ -150,31 +116,25 @@ public class RaftCluster {
 
         timeoutScheduler.scheduleAtFixedRate(() -> {
 
-            long currentTime = System.currentTimeMillis();
+            for (RaftNode node : nodes) {
 
-            for (Node node : nodes) {
+                // Each node has its own random election timeout,
+                // so usually only one node times out at a time.
+                if (node.isElectionTimeoutElapsed() &&
+                        node.markHeartbeatTimedOut()) {
 
-                if (node.getState() != NodeState.FOLLOWER) {
-                    continue;
-                }
+                    System.out.println(
+                            "Election timeout (" +
+                            node.getElectionTimeout() +
+                            " ms) for Node " + node.getNodeId());
 
-                long elapsed = currentTime -
-                        node.getLastHeartbeatTime();
-
-                if (elapsed >= HEARTBEAT_TIMEOUT) {
-
-                    if (node.markHeartbeatTimedOut()) {
-
-                        System.out.println(
-                                "Heartbeat timeout detected for Node " +
-                                node.getNodeId());
-
-                        electLeader(node.getNodeId());
-                    }
+                    electLeader(node.getNodeId());
                 }
             }
 
-        }, HEARTBEAT_TIMEOUT, 500, TimeUnit.MILLISECONDS);
+        }, RaftNode.MIN_ELECTION_TIMEOUT,
+           TIMEOUT_CHECK_INTERVAL,
+           TimeUnit.MILLISECONDS);
     }
 
     public synchronized void stopHeartbeats() {
@@ -194,7 +154,7 @@ public class RaftCluster {
 
     public void crashNode(int nodeId) {
 
-        Node node = getNodeById(nodeId);
+        RaftNode node = getNodeById(nodeId);
 
         if (node == null) {
 
@@ -210,7 +170,7 @@ public class RaftCluster {
 
     public void recoverNode(int nodeId) {
 
-        Node node = getNodeById(nodeId);
+        RaftNode node = getNodeById(nodeId);
 
         if (node == null) {
 
@@ -262,7 +222,7 @@ public class RaftCluster {
 
     public synchronized int getCurrentLeaderId() {
 
-        for (Node node : nodes) {
+        for (RaftNode node : nodes) {
 
             if (node.getState() == NodeState.LEADER) {
                 return node.getNodeId();
@@ -272,9 +232,9 @@ public class RaftCluster {
         return -1;
     }
 
-    private Node getNodeById(int nodeId) {
+    private RaftNode getNodeById(int nodeId) {
 
-        for (Node node : nodes) {
+        for (RaftNode node : nodes) {
 
             if (node.getNodeId() == nodeId) {
                 return node;
