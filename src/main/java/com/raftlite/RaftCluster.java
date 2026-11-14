@@ -1,6 +1,8 @@
 
 package com.raftlite;
 
+import com.raftlite.monitoring.SimulationMonitor;
+
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
@@ -14,6 +16,10 @@ public class RaftCluster {
 
     private final NetworkSimulator network =
             new NetworkSimulator();
+
+    // Logs and counts everything that happens in this cluster.
+    private final SimulationMonitor monitor =
+            new SimulationMonitor();
 
     private ScheduledExecutorService heartbeatScheduler;
     private ScheduledExecutorService timeoutScheduler;
@@ -34,6 +40,9 @@ public class RaftCluster {
         }
 
         electionManager = new ElectionManager(nodes, network);
+
+        electionManager.addListener(monitor);
+        network.addListener(monitor);
     }
 
     public synchronized void displayClusterStatus() {
@@ -64,6 +73,11 @@ public class RaftCluster {
 
     public ElectionManager getElectionManager() {
         return electionManager;
+    }
+
+    /** The event log and statistics for this cluster. */
+    public SimulationMonitor getMonitor() {
+        return monitor;
     }
 
     private void broadcastHeartbeats() {
@@ -128,6 +142,10 @@ public class RaftCluster {
                             node.getElectionTimeout() +
                             " ms) for Node " + node.getNodeId());
 
+                    monitor.onElectionTimeout(
+                            node.getNodeId(),
+                            node.getElectionTimeout());
+
                     electLeader(node.getNodeId());
                 }
             }
@@ -165,7 +183,13 @@ public class RaftCluster {
             return;
         }
 
+        boolean wasAlreadyFailed = node.getState() == NodeState.FAILED;
+
         node.fail();
+
+        if (!wasAlreadyFailed) {
+            monitor.onNodeFailed(nodeId);
+        }
     }
 
     public void recoverNode(int nodeId) {
@@ -181,7 +205,13 @@ public class RaftCluster {
             return;
         }
 
+        boolean wasFailed = node.getState() == NodeState.FAILED;
+
         node.recover();
+
+        if (wasFailed) {
+            monitor.onNodeRecovered(nodeId);
+        }
     }
 
     public void disconnectNodes(int nodeA, int nodeB) {
