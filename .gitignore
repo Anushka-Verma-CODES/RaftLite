@@ -1,2 +1,4 @@
 target/
 help.txt
+# Local SQLite databases created by the demo
+*.db

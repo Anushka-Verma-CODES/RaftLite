@@ -80,7 +80,8 @@ public class RaftCluster {
         return monitor;
     }
 
-    private void broadcastHeartbeats() {
+    // Package-private so tests can send one round of heartbeats on demand.
+    void broadcastHeartbeats() {
 
         for (RaftNode leader : nodes) {
 
@@ -88,24 +89,36 @@ public class RaftCluster {
                 continue;
             }
 
+            int leaderTerm = leader.getCurrentTerm();
+
             for (RaftNode follower : nodes) {
 
                 if (follower.getNodeId() == leader.getNodeId()) {
                     continue;
                 }
 
+                // A reply may have shown this leader a newer term, making it
+                // step down mid-round. It must stop sending heartbeats then,
+                // otherwise followers would accept it as leader of that newer term.
+                if (leader.getState() != NodeState.LEADER ||
+                        leader.getCurrentTerm() != leaderTerm) {
+                    break;
+                }
+
                 RaftMessage heartbeat = new RaftMessage(
                         leader.getNodeId(),
                         follower.getNodeId(),
                         MessageType.HEARTBEAT,
-                        leader.getCurrentTerm());
+                        leaderTerm);
 
                 network.sendMessage(heartbeat);
             }
 
-            System.out.println(
-                    "Leader Node " + leader.getNodeId() +
-                    " sent heartbeats.");
+            if (leader.getState() == NodeState.LEADER) {
+                System.out.println(
+                        "Leader Node " + leader.getNodeId() +
+                        " sent heartbeats.");
+            }
         }
     }
 
@@ -262,7 +275,13 @@ public class RaftCluster {
         return -1;
     }
 
-    private RaftNode getNodeById(int nodeId) {
+    /** Number of nodes in the cluster. */
+    public int getClusterSize() {
+        return nodes.size();
+    }
+
+    // Package-private so tests in this package can inspect a node.
+    RaftNode getNodeById(int nodeId) {
 
         for (RaftNode node : nodes) {
 
