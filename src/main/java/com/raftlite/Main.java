@@ -128,6 +128,8 @@ public class Main {
                     "Total election attempts: " +
                     elections.getElectionAttempts());
 
+            cluster.getMonitor().printReport(System.out);
+
             System.out.println(
                     "\n===== ALL TESTS COMPLETED =====");
 

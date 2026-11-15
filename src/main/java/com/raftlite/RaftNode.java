@@ -235,10 +235,15 @@ public class RaftNode {
     // Heartbeats and higher terms
     // ---------------------------------------------------------------
 
-    public synchronized void receiveHeartbeat(int leaderTerm, int senderId) {
+    /**
+     * Applies a heartbeat from a leader.
+     *
+     * @return true if the heartbeat was accepted and the election timer reset
+     */
+    public synchronized boolean receiveHeartbeat(int leaderTerm, int senderId) {
 
         if (state == NodeState.FAILED || leaderTerm < currentTerm) {
-            return;
+            return false;
         }
 
         if (leaderTerm > currentTerm) {
@@ -250,7 +255,7 @@ public class RaftNode {
                     "Node " + nodeId +
                     " received a same-term heartbeat from Node " +
                     senderId + ". Leader conflict detected.");
-            return;
+            return false;
 
         } else if (state == NodeState.CANDIDATE) {
             // Someone else already won this term.
@@ -264,6 +269,8 @@ public class RaftNode {
 
         leaderId = senderId;
         resetElectionTimer();
+
+        return true;
     }
 
     /**
@@ -295,32 +302,38 @@ public class RaftNode {
         }
     }
 
-    public synchronized void receiveMessage(RaftMessage message) {
+    /**
+     * Delivers a message to this node.
+     *
+     * @return true if the node was alive and handled the message
+     */
+    public synchronized boolean receiveMessage(RaftMessage message) {
 
         if (state == NodeState.FAILED) {
-            return;
+            return false;
         }
 
         switch (message.getType()) {
 
             case HEARTBEAT:
-                receiveHeartbeat(message.getTerm(), message.getSenderId());
-                break;
+                return receiveHeartbeat(message.getTerm(), message.getSenderId());
 
             case VOTE_RESPONSE:
                 handleVoteResponse(new VoteResponse(
                         message.getSenderId(),
                         message.getTerm(),
                         message.isVoteGranted()));
-                break;
+                return true;
 
             case VOTE_REQUEST:
                 System.out.println(
                         "Node " + nodeId +
                         " received vote request from Node " +
                         message.getSenderId());
-                break;
+                return true;
         }
+
+        return false;
     }
 
     // ---------------------------------------------------------------

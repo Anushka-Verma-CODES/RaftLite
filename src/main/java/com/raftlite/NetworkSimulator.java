@@ -1,9 +1,12 @@
 
 package com.raftlite;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class NetworkSimulator {
 
@@ -12,6 +15,20 @@ public class NetworkSimulator {
 
     private final Set<String> disconnectedLinks =
             ConcurrentHashMap.newKeySet();
+
+    // Observers such as the monitoring module. They are only told about
+    // messages that were actually sent, delivered or blocked.
+    private final List<SimulationListener> listeners =
+            new CopyOnWriteArrayList<>();
+
+    public void addListener(SimulationListener listener) {
+        listeners.add(Objects.requireNonNull(
+                listener, "listener must not be null"));
+    }
+
+    public void removeListener(SimulationListener listener) {
+        listeners.remove(listener);
+    }
 
     public void registerNode(RaftNode node) {
 
@@ -31,6 +48,11 @@ public class NetworkSimulator {
             System.out.println(
                     "Message failed: node not found.");
 
+            notifyMessageBlocked(
+                    message.getSenderId(),
+                    message.getReceiverId(),
+                    "node not found");
+
             return false;
         }
 
@@ -39,6 +61,11 @@ public class NetworkSimulator {
 
             System.out.println(
                     "Message blocked: a node has failed.");
+
+            notifyMessageBlocked(
+                    message.getSenderId(),
+                    message.getReceiverId(),
+                    "a node has failed");
 
             return false;
         }
@@ -52,6 +79,11 @@ public class NetworkSimulator {
             System.out.println(
                     "Message blocked: link is disconnected.");
 
+            notifyMessageBlocked(
+                    message.getSenderId(),
+                    message.getReceiverId(),
+                    "link is disconnected");
+
             return false;
         }
 
@@ -59,7 +91,23 @@ public class NetworkSimulator {
 
             case HEARTBEAT:
 
-                receiver.receiveMessage(message);
+                for (SimulationListener listener : listeners) {
+                    listener.onHeartbeatSent(
+                            message.getSenderId(),
+                            message.getReceiverId(),
+                            message.getTerm());
+                }
+
+                boolean accepted = receiver.receiveMessage(message);
+
+                if (accepted) {
+                    for (SimulationListener listener : listeners) {
+                        listener.onHeartbeatReceived(
+                                message.getSenderId(),
+                                message.getReceiverId(),
+                                message.getTerm());
+                    }
+                }
 
                 // The heartbeat reply carries the follower's term, so a
                 // stale leader learns about a newer term and steps down.
@@ -114,21 +162,32 @@ public class NetworkSimulator {
             return;
         }
 
-        disconnectedLinks.add(getLinkKey(nodeA, nodeB));
+        if (!disconnectedLinks.add(getLinkKey(nodeA, nodeB))) {
+            return;
+        }
 
         System.out.println(
                 "Connection disconnected between Node " +
                 nodeA + " and Node " + nodeB);
+
+        for (SimulationListener listener : listeners) {
+            listener.onLinkDisconnected(nodeA, nodeB);
+        }
     }
 
     public void reconnectNodes(int nodeA, int nodeB) {
 
-        disconnectedLinks.remove(
-                getLinkKey(nodeA, nodeB));
+        if (!disconnectedLinks.remove(getLinkKey(nodeA, nodeB))) {
+            return;
+        }
 
         System.out.println(
                 "Connection restored between Node " +
                 nodeA + " and Node " + nodeB);
+
+        for (SimulationListener listener : listeners) {
+            listener.onLinkReconnected(nodeA, nodeB);
+        }
     }
 
     public void disconnectNode(int nodeId) {
@@ -169,6 +228,15 @@ public class NetworkSimulator {
                 term);
 
         return sendMessage(request);
+    }
+
+    private void notifyMessageBlocked(int senderId,
+                                      int receiverId,
+                                      String reason) {
+
+        for (SimulationListener listener : listeners) {
+            listener.onMessageBlocked(senderId, receiverId, reason);
+        }
     }
 
     private String getLinkKey(int nodeA, int nodeB) {
