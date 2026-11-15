@@ -1,12 +1,92 @@
 
 package com.raftlite;
 
+import com.raftlite.persistence.DatabaseManager;
+import com.raftlite.persistence.PersistenceException;
+import com.raftlite.persistence.SimulationRepository;
+import com.raftlite.persistence.SimulationRun;
+
+import java.util.List;
+
 public class Main {
 
+    private static final int CLUSTER_SIZE = 5;
+
+    /**
+     * Runs the demo scenario and stores the run in a SQLite database.
+     *
+     * @param args optional: path of the database file
+     *             (default {@value DatabaseManager#DEFAULT_DATABASE_FILE})
+     */
     public static void main(String[] args)
             throws InterruptedException {
 
-        RaftCluster cluster = new RaftCluster(5);
+        String databaseFile = args.length > 0
+                ? args[0]
+                : DatabaseManager.DEFAULT_DATABASE_FILE;
+
+        try (DatabaseManager database = new DatabaseManager(databaseFile)) {
+
+            SimulationRepository repository = new SimulationRepository(database);
+
+            long runId = repository.startRun(
+                    CLUSTER_SIZE, "Demo: crash, recovery, partition and leader isolation");
+
+            System.out.println(
+                    "Recording simulation run #" + runId + " in " + databaseFile);
+
+            RaftCluster cluster = runScenario();
+
+            repository.saveRunResults(
+                    runId,
+                    cluster.getMonitor().getEventLogger().getEvents(),
+                    cluster.getElectionManager().getLeaderHistory(),
+                    cluster.getMonitor().getStatistics());
+
+            printStoredRun(repository, runId);
+
+        } catch (PersistenceException e) {
+
+            System.err.println("Database error: " + e.getMessage());
+
+            if (e.getCause() != null) {
+                System.err.println("Cause: " + e.getCause().getMessage());
+            }
+
+            System.exit(1);
+        }
+    }
+
+    /** Reads the run back from the database to show what was stored. */
+    private static void printStoredRun(SimulationRepository repository, long runId) {
+
+        System.out.println("\n===== STORED IN DATABASE (run #" + runId + ") =====");
+
+        System.out.println("Events by type:");
+        repository.countEventsByType(runId).forEach((type, count) ->
+                System.out.printf("  %-18s %d%n", type, count));
+
+        System.out.println("Leader of each term:");
+        repository.findLeaderHistory(runId).forEach((term, leader) ->
+                System.out.println("  Term " + term + " -> Node " + leader));
+
+        List<SimulationRun> runs = repository.findAllRuns();
+
+        System.out.println("Runs stored so far: " + runs.size());
+
+        for (SimulationRun run : runs) {
+            System.out.println(
+                    "  #" + run.runId() + "  started " + run.startedAt() +
+                    "  nodes=" + run.clusterSize() +
+                    "  " + (run.isFinished() ? "finished" : "incomplete"));
+        }
+    }
+
+    /** The fault-tolerance scenario. Returns the cluster so its results can be saved. */
+    private static RaftCluster runScenario()
+            throws InterruptedException {
+
+        RaftCluster cluster = new RaftCluster(CLUSTER_SIZE);
 
         try {
 
@@ -140,5 +220,7 @@ public class Main {
             System.out.println(
                     "Heartbeat and timeout schedulers stopped.");
         }
+
+        return cluster;
     }
 }
