@@ -3,8 +3,10 @@ package com.raftlite;
 
 import com.raftlite.monitoring.SimulationMonitor;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -20,6 +22,11 @@ public class RaftCluster {
     // Logs and counts everything that happens in this cluster.
     private final SimulationMonitor monitor =
             new SimulationMonitor();
+
+    // Observers added from outside (e.g. the dashboard). They receive the
+    // cluster-level events below as well as the network events.
+    private final List<SimulationListener> extraListeners =
+            new CopyOnWriteArrayList<>();
 
     private ScheduledExecutorService heartbeatScheduler;
     private ScheduledExecutorService timeoutScheduler;
@@ -155,9 +162,10 @@ public class RaftCluster {
                             node.getElectionTimeout() +
                             " ms) for Node " + node.getNodeId());
 
-                    monitor.onElectionTimeout(
-                            node.getNodeId(),
-                            node.getElectionTimeout());
+                    notifyClusterListeners(listener ->
+                            listener.onElectionTimeout(
+                                    node.getNodeId(),
+                                    node.getElectionTimeout()));
 
                     electLeader(node.getNodeId());
                 }
@@ -201,7 +209,7 @@ public class RaftCluster {
         node.fail();
 
         if (!wasAlreadyFailed) {
-            monitor.onNodeFailed(nodeId);
+            notifyClusterListeners(listener -> listener.onNodeFailed(nodeId));
         }
     }
 
@@ -223,7 +231,7 @@ public class RaftCluster {
         node.recover();
 
         if (wasFailed) {
-            monitor.onNodeRecovered(nodeId);
+            notifyClusterListeners(listener -> listener.onNodeRecovered(nodeId));
         }
     }
 
@@ -273,6 +281,37 @@ public class RaftCluster {
         }
 
         return -1;
+    }
+
+    /** Sends a cluster-level event to the monitor and to extra listeners. */
+    private void notifyClusterListeners(Consumer<SimulationListener> event) {
+
+        event.accept(monitor);
+
+        for (SimulationListener listener : extraListeners) {
+            event.accept(listener);
+        }
+    }
+
+    /** Read-only view of the nodes, in id order (used by the dashboard). */
+    public List<RaftNode> getNodes() {
+        return Collections.unmodifiableList(nodes);
+    }
+
+    /** True if nodes A and B can currently exchange messages over their link. */
+    public boolean isLinkConnected(int nodeA, int nodeB) {
+        return !network.isLinkDisconnected(nodeA, nodeB);
+    }
+
+    /** Registers an extra observer of network traffic, timeouts and faults. */
+    public void addSimulationListener(SimulationListener listener) {
+        network.addListener(listener);
+        extraListeners.add(listener);
+    }
+
+    /** Registers an extra observer of elections. */
+    public void addElectionListener(ElectionListener listener) {
+        electionManager.addListener(listener);
     }
 
     /** Number of nodes in the cluster. */

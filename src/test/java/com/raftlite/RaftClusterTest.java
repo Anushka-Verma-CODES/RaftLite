@@ -152,6 +152,40 @@ class RaftClusterTest {
     }
 
     @Test
+    void extraListenersReceiveClusterAndElectionEvents() {
+
+        List<String> seen = new java.util.ArrayList<>();
+
+        cluster.addSimulationListener(new SimulationListener() {
+            @Override
+            public void onNodeFailed(int nodeId) {
+                seen.add("failed " + nodeId);
+            }
+
+            @Override
+            public void onNodeRecovered(int nodeId) {
+                seen.add("recovered " + nodeId);
+            }
+        });
+
+        cluster.addElectionListener(new ElectionListener() {
+            @Override
+            public void onLeaderElected(int leaderId, int term, int votes, long durationMillis) {
+                seen.add("leader " + leaderId);
+            }
+        });
+
+        cluster.electLeader(2);
+        cluster.crashNode(4);
+        cluster.recoverNode(4);
+
+        assertEquals(List.of("leader 2", "failed 4", "recovered 4"), seen);
+        assertTrue(cluster.isLinkConnected(1, 2));
+        cluster.disconnectNodes(1, 2);
+        assertTrue(!cluster.isLinkConnected(2, 1));
+    }
+
+    @Test
     void operationsOnUnknownNodesAreIgnored() {
 
         cluster.electLeader(1);

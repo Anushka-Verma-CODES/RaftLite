@@ -18,6 +18,7 @@
 | F12 | Statistics: elections, success rate, leader changes, heartbeats, timeouts, failures, blocked messages, election duration | `StatisticsTracker` |
 | F13 | Store every run in SQLite and query it later | `SimulationRepository` |
 | F14 | Console report of cluster status, leader history, statistics and stored data | `Main` |
+| F15 | Interactive JavaFX dashboard with animated cluster, fault buttons, live log, charts and run history | `com.raftlite.ui`, see [Dashboard guide](06-dashboard.md) |
 
 ## 3.2 Demo scenario (`Main`)
 

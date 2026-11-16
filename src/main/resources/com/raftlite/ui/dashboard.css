@@ -1,0 +1,134 @@
+/* RaftLite dashboard styles */
+
+.root {
+    -fx-font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+    -fx-font-size: 13px;
+    -fx-base: #f1f5f9;
+    -fx-background-color: #f8fafc;
+    -fx-accent: #2563eb;
+    -fx-focus-color: #2563eb;
+}
+
+/* Header */
+.header {
+    -fx-background-color: #0f172a;
+    -fx-padding: 10 16 10 16;
+}
+.app-title {
+    -fx-text-fill: white;
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+}
+.app-subtitle {
+    -fx-text-fill: #94a3b8;
+}
+.status-chip {
+    -fx-text-fill: #e2e8f0;
+    -fx-background-color: #1e293b;
+    -fx-background-radius: 12;
+    -fx-padding: 4 10 4 10;
+}
+.chip-ok {
+    -fx-background-color: #166534;
+    -fx-text-fill: white;
+}
+.chip-warn {
+    -fx-background-color: #9a3412;
+    -fx-text-fill: white;
+}
+
+/* Cluster view */
+.cluster-view {
+    -fx-background-color: white;
+    -fx-border-color: #e2e8f0;
+    -fx-border-width: 0 1 0 0;
+}
+.link {
+    -fx-stroke: #cbd5e1;
+    -fx-stroke-width: 2;
+}
+.link-cut {
+    -fx-stroke: #ef4444;
+    -fx-stroke-dash-array: 8 6;
+    -fx-opacity: 0.8;
+}
+.node-body {
+    -fx-effect: dropshadow(gaussian, rgba(15, 23, 42, 0.25), 8, 0, 0, 2);
+}
+.node-title {
+    -fx-fill: white;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+.node-state {
+    -fx-fill: white;
+    -fx-font-size: 10px;
+}
+.node-detail {
+    -fx-fill: #334155;
+    -fx-font-size: 12px;
+}
+
+/* Controls */
+.controls {
+    -fx-background-color: #f8fafc;
+    -fx-background: #f8fafc;
+}
+.titled-pane > .title {
+    -fx-font-weight: bold;
+}
+.button, .toggle-button {
+    -fx-background-radius: 6;
+    -fx-padding: 6 12 6 12;
+}
+.button.primary, .toggle-button:selected {
+    -fx-base: #2563eb;
+    -fx-text-fill: white;
+}
+.button.danger {
+    -fx-base: #dc2626;
+    -fx-text-fill: white;
+}
+.legend {
+    -fx-padding: 8;
+    -fx-background-color: white;
+    -fx-background-radius: 6;
+    -fx-border-color: #e2e8f0;
+    -fx-border-radius: 6;
+}
+
+/* Tables */
+.table-row-cell.row-leader {
+    -fx-background-color: #dcfce7;
+}
+.table-row-cell.row-fault {
+    -fx-background-color: #fee2e2;
+}
+.table-row-cell.row-election {
+    -fx-background-color: #fef3c7;
+}
+.table-row-cell.row-leader:selected,
+.table-row-cell.row-fault:selected,
+.table-row-cell.row-election:selected {
+    -fx-background-color: -fx-selection-bar;
+}
+
+/* Statistics */
+.stats-grid {
+    -fx-padding: 8;
+}
+.stat-value {
+    -fx-font-weight: bold;
+    -fx-font-size: 14px;
+}
+.chart-series-line {
+    -fx-stroke: #2563eb;
+    -fx-stroke-width: 2.5;
+}
+.chart-bar {
+    -fx-bar-fill: #f59e0b;
+}
+
+.mono {
+    -fx-font-family: "Consolas", "Menlo", monospace;
+}

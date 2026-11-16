@@ -8,7 +8,8 @@ module independent and testable.
 
 ```mermaid
 flowchart TB
-    Main["Main<br/>(demo scenario)"]
+    Main["Main<br/>(console demo)"]
+    UI["DashboardApp<br/>(JavaFX)"]
 
     subgraph Core["Simulation core: com.raftlite"]
         Cluster["RaftCluster<br/>fault-injection API, schedulers"]
@@ -41,12 +42,17 @@ flowchart TB
     SM --> Log
     SM --> Stats
     Main -- "save run results" --> Repo
+    UI --> Cluster
+    Net -. SimulationListener .-> UI
+    EM -. ElectionListener .-> UI
+    UI -- "save / list / delete runs" --> Repo
     Repo --> DBM --> File
 ```
 
 | Layer | Responsibility |
 |-------|----------------|
 | `Main` | Runs a scripted fault scenario, then stores and prints the run. |
+| `ui` (JavaFX) | Interactive dashboard: draws and animates the cluster, injects faults, shows logs, charts and stored runs. |
 | Simulation core | Implements the Raft election rules and the simulated network. |
 | Monitoring | Turns listener callbacks into an event log and statistics. |
 | Persistence | Stores runs in SQLite through JDBC and reads them back. |
@@ -193,6 +199,9 @@ sequenceDiagram
   only one election runs at a time.
 - Listener lists and the event log use `CopyOnWriteArrayList`; statistics use
   atomic counters. Monitoring can therefore be called from any thread.
+- The JavaFX dashboard never touches its controls from simulator threads.
+  `UiEventBridge` (a listener) puts events in a `ConcurrentLinkedQueue`, and a
+  100 ms `Timeline` on the JavaFX thread drains the queue and redraws.
 - Database writes happen **once, at the end of a run**, from the main thread. The
   heartbeat threads are never slowed by I/O.
 

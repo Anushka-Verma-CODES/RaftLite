@@ -15,6 +15,14 @@ public interface SimulationListener {
     default void onHeartbeatSent(int leaderId, int followerId, int term) {
     }
 
+    /** A candidate's vote request was delivered to another node. */
+    default void onVoteRequested(int candidateId, int voterId, int term) {
+    }
+
+    /** A node answered a vote request (granted or rejected). */
+    default void onVoteResponded(int voterId, int candidateId, int term, boolean granted) {
+    }
+
     /** A follower accepted a heartbeat from a leader. */
     default void onHeartbeatReceived(int leaderId, int followerId, int term) {
     }
