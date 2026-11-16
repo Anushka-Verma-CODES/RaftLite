@@ -116,6 +116,13 @@ public class NetworkSimulator {
 
             case VOTE_REQUEST:
 
+                for (SimulationListener listener : listeners) {
+                    listener.onVoteRequested(
+                            message.getSenderId(),
+                            message.getReceiverId(),
+                            message.getTerm());
+                }
+
                 VoteResponse vote = receiver.handleVoteRequest(
                         new VoteRequest(
                                 message.getTerm(),
@@ -139,6 +146,14 @@ public class NetworkSimulator {
                 break;
 
             case VOTE_RESPONSE:
+
+                for (SimulationListener listener : listeners) {
+                    listener.onVoteResponded(
+                            message.getSenderId(),
+                            message.getReceiverId(),
+                            message.getTerm(),
+                            message.isVoteGranted());
+                }
 
                 receiver.receiveMessage(message);
 
@@ -216,6 +231,11 @@ public class NetworkSimulator {
                 reconnectNodes(nodeId, otherNode);
             }
         }
+    }
+
+    /** True if the direct link between the two nodes is currently cut. */
+    public boolean isLinkDisconnected(int nodeA, int nodeB) {
+        return disconnectedLinks.contains(getLinkKey(nodeA, nodeB));
     }
 
     public boolean requestVote(

@@ -47,7 +47,29 @@ class NetworkSimulatorTest {
             public void onHeartbeatReceived(int leaderId, int followerId, int term) {
                 events.add("heartbeat " + leaderId + "->" + followerId);
             }
+
+            @Override
+            public void onVoteRequested(int candidateId, int voterId, int term) {
+                events.add("vote? " + candidateId + "->" + voterId + " t" + term);
+            }
+
+            @Override
+            public void onVoteResponded(int voterId, int candidateId, int term, boolean granted) {
+                events.add((granted ? "yes " : "no ") + voterId + "->" + candidateId);
+            }
         });
+    }
+
+    @Test
+    void voteRequestsAndAnswersAreReportedToListeners() throws ElectionException {
+
+        nodes[2].handleVoteRequest(new VoteRequest(1, 3));   // node 2 already voted for 3
+        int term = nodes[1].startElection();
+
+        network.requestVote(1, 2, term);
+        network.requestVote(1, 3, term);
+
+        assertEquals(List.of("vote? 1->2 t1", "no 2->1", "vote? 1->3 t1", "yes 3->1"), events);
     }
 
     private static RaftMessage heartbeat(int from, int to, int term) {

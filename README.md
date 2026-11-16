@@ -3,8 +3,11 @@
 RaftLite is a Java simulator of **leader election in the Raft consensus algorithm**.
 It runs a cluster of nodes inside one JVM, makes them elect a leader, keeps the
 leader alive with heartbeats, and lets you inject faults (node crashes, broken
-network links, isolated leaders) to watch the cluster recover. Every run is
-logged, measured and stored in a SQLite database.
+network links, isolated leaders) to watch the cluster recover. A JavaFX
+dashboard shows all of this live, and every run is logged, measured and stored
+in a SQLite database.
+
+![RaftLite dashboard during a network partition](docs/images/dashboard-partition.png)
 
 ## Features
 
@@ -20,7 +23,10 @@ logged, measured and stored in a SQLite database.
   rate, heartbeats, timeouts, failures, blocked messages, election duration).
 - **Database integration**: each run, its full event log, its leader history and
   its statistics are saved to SQLite in one transaction and can be queried later.
-- **Tests**: 91 JUnit 5 tests covering every module.
+- **JavaFX dashboard**: animated cluster view (votes, heartbeats, blocked
+  messages, election timers), buttons to inject faults, a live event log, charts,
+  and the run history read from the database.
+- **Tests**: 93 JUnit 5 tests covering every module.
 
 ## Requirements
 
@@ -29,8 +35,8 @@ logged, measured and stored in a SQLite database.
 | JDK   | 26 (set in `pom.xml` via `maven.compiler.release`) |
 | Maven | 3.9 or newer                                 |
 
-Nothing else needs to be installed: SQLite is embedded through the
-`sqlite-jdbc` driver, and the database file is created on first run.
+Nothing else needs to be installed: Maven downloads JavaFX (OpenJFX 26) and
+the `sqlite-jdbc` driver, and the database file is created on first run.
 
 ## Quick start
 
@@ -40,16 +46,26 @@ Build and run all tests:
 mvn clean test
 ```
 
-Run the demo scenario. It writes to `raftlite.db` in the current folder:
+Open the **dashboard** (recommended for demos):
+
+```bash
+mvn compile javafx:run
+```
+
+Or run the scripted **console demo**. It writes to `raftlite.db` in the current folder:
 
 ```bash
 mvn compile exec:java
 ```
 
-Store the run in a different database file:
+Use a different database file:
 
 ```bash
 mvn compile exec:java -Dexec.args="runs/my-run.db"
+```
+
+```bash
+mvn compile javafx:run -Djavafx.args="runs/my-run.db"
 ```
 
 Each run appends to the database, so running the demo several times builds up a
@@ -72,10 +88,16 @@ src/main/java/com/raftlite/
 ├── monitoring/               Event log and statistics
 │   ├── SimulationMonitor.java, EventLogger.java, StatisticsTracker.java
 │   └── SimulationEvent.java, SimulationEventType.java, SimulationStatistics.java
-└── persistence/              SQLite storage (JDBC)
-    ├── DatabaseManager.java, SimulationRepository.java
-    └── SimulationRun.java, PersistenceException.java
-src/main/resources/db/schema.sql    Database schema
+├── persistence/              SQLite storage (JDBC)
+│   ├── DatabaseManager.java, SimulationRepository.java
+│   └── SimulationRun.java, PersistenceException.java
+└── ui/                       JavaFX dashboard
+    ├── DashboardApp.java     Application: window, controls, refresh loop, run lifecycle
+    ├── ClusterView.java      Animated drawing of nodes, links and messages
+    ├── EventLogPane.java, StatisticsPane.java, RunHistoryPane.java
+    └── UiEventBridge.java, UiEvent.java, Dialogs.java
+src/main/resources/db/schema.sql                  Database schema
+src/main/resources/com/raftlite/ui/dashboard.css  Dashboard styles
 src/test/java/...                   JUnit 5 tests
 docs/                               Project documentation
 ```
@@ -89,6 +111,7 @@ docs/                               Project documentation
 | [Functionality](docs/03-functionality.md) | Features, demo scenario, sample output |
 | [Database integration](docs/04-database.md) | Schema, ER diagram, data flow, example SQL queries |
 | [Testing](docs/05-testing.md) | Test strategy, test inventory, results, bug found by testing |
+| [Dashboard guide](docs/06-dashboard.md) | Using the JavaFX dashboard, demo walkthrough, how it is built |
 
 ## Team
 
